@@ -65,24 +65,26 @@ export default function Home() {
       case 'playing':
       case 'game-over':
         return (
-          <div className="flex h-screen w-screen flex-col items-center justify-center p-2 gap-1">
-            <h1 className="font-headline text-2xl font-bold tracking-tighter" style={{ color: '#39FF14', textShadow: '0 0 10px #39FF14' }}>
-              Neon Slider
-            </h1>
-            <Scoreboard player1Score={scores.player1} player2Score={scores.player2} />
-            <div className="relative w-full flex-1 flex justify-center items-center">
-              <AirHockeyGame
-                key={resetKey}
-                onScoreChange={handleScoreChange}
-                initialScores={scores}
-                isPaused={gameState === 'game-over'}
-                gameMode={gameMode}
-              />
-              {gameState === 'game-over' && winner && (
-                <GameOver winner={winner} onNewGame={handleNewGame} />
-              )}
-            </div>
+          <div className="flex h-screen w-screen items-start justify-center p-4 gap-4">
             <GameControls onReset={handleNewGame} onExit={handleExit} />
+            <div className="flex-1 h-full flex flex-col items-center justify-center gap-2">
+              <h1 className="font-headline text-lg font-bold tracking-tighter" style={{ color: '#39FF14', textShadow: '0 0 10px #39FF14' }}>
+                Neon Slider
+              </h1>
+              <Scoreboard player1Score={scores.player1} player2Score={scores.player2} />
+              <div className="relative w-full flex-1 flex justify-center items-center">
+                <AirHockeyGame
+                  key={resetKey}
+                  onScoreChange={handleScoreChange}
+                  initialScores={scores}
+                  isPaused={gameState === 'game-over'}
+                  gameMode={gameMode}
+                />
+                {gameState === 'game-over' && winner && (
+                  <GameOver winner={winner} onNewGame={handleNewGame} />
+                )}
+              </div>
+            </div>
           </div>
         );
     }
