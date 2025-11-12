@@ -5,7 +5,7 @@ type ScoreboardProps = {
 
 export default function Scoreboard({ player1Score, player2Score }: ScoreboardProps) {
   return (
-    <div className="font-headline font-bold text-5xl flex justify-center gap-8">
+    <div className="font-headline font-bold text-4xl flex justify-center gap-8">
       <div style={{ color: '#00ff77', textShadow: '0 0 15px #00ff77' }}>
         {player1Score}
       </div>
