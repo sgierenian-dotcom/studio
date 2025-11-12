@@ -1,42 +1,37 @@
 'use client';
 
 import React, { useRef, useEffect, useCallback } from 'react';
-import { useToast } from '@/hooks/use-toast';
-import { getAiPaddlePosition } from '@/ai/flows/ai-adaptive-opponent';
-import type { AIPaddlePositionInput } from '@/ai/flows/ai-adaptive-opponent';
 import type { Paddle, Puck } from '@/lib/types';
 
 const CANVAS_WIDTH = 360;
 const CANVAS_HEIGHT = 640;
 const PADDLE_RADIUS = 30;
 const PUCK_RADIUS = 20;
-const AI_CALL_INTERVAL = 250; // ms
 
 type AirHockeyGameProps = {
-  difficulty: number;
-  onScoreChange: (scores: { player: number; ai: number }) => void;
-  initialScores: { player: number; ai: number };
+  onScoreChange: (scores: { player1: number; player2: number }) => void;
+  initialScores: { player1: number; player2: number };
   isPaused: boolean;
 };
 
 export default function AirHockeyGame({
-  difficulty,
   onScoreChange,
   initialScores,
   isPaused,
 }: AirHockeyGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { toast } = useToast();
 
   const scores = useRef(initialScores);
-  const playerPaddle = useRef<Paddle>({
+  const player1Paddle = useRef<Paddle>({
+    id: 'player1',
     x: CANVAS_WIDTH / 2,
     y: CANVAS_HEIGHT - 60,
     radius: PADDLE_RADIUS,
     color: '#00ff77',
     glow: '#00ff77',
   });
-  const aiPaddle = useRef<Paddle>({
+  const player2Paddle = useRef<Paddle>({
+    id: 'player2',
     x: CANVAS_WIDTH / 2,
     y: 60,
     radius: PADDLE_RADIUS,
@@ -53,11 +48,8 @@ export default function AirHockeyGame({
     glow: '#fff',
   });
   
-  const activePaddle = useRef<Paddle | null>(null);
+  const activePaddles = useRef<Map<number, Paddle>>(new Map());
   const animationFrameId = useRef<number>();
-  const lastAiCallTimestamp = useRef(0);
-  const aiTargetX = useRef(CANVAS_WIDTH / 2);
-  const isAiThinking = useRef(false);
 
   const resetPuck = useCallback((direction: number) => {
     puck.current.x = CANVAS_WIDTH / 2;
@@ -103,8 +95,8 @@ export default function AirHockeyGame({
     ctx.arc(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 60, 0, 2 * Math.PI);
     ctx.stroke();
 
-    drawNeonCircle(playerPaddle.current.x, playerPaddle.current.y, playerPaddle.current.radius, playerPaddle.current.color, playerPaddle.current.glow);
-    drawNeonCircle(aiPaddle.current.x, aiPaddle.current.y, aiPaddle.current.radius, aiPaddle.current.color, aiPaddle.current.glow);
+    drawNeonCircle(player1Paddle.current.x, player1Paddle.current.y, player1Paddle.current.radius, player1Paddle.current.color, player1Paddle.current.glow);
+    drawNeonCircle(player2Paddle.current.x, player2Paddle.current.y, player2Paddle.current.radius, player2Paddle.current.color, player2Paddle.current.glow);
     drawNeonCircle(puck.current.x, puck.current.y, puck.current.radius, puck.current.color, puck.current.glow);
   }, []);
 
@@ -114,45 +106,6 @@ export default function AirHockeyGame({
       animationFrameId.current = requestAnimationFrame(gameLoop);
       return;
     }
-    
-    const now = Date.now();
-    if (now - lastAiCallTimestamp.current > AI_CALL_INTERVAL && !isAiThinking.current) {
-      lastAiCallTimestamp.current = now;
-      isAiThinking.current = true;
-
-      const aiInput: AIPaddlePositionInput = {
-        puckX: puck.current.x,
-        puckY: puck.current.y,
-        puckVY: puck.current.vy,
-        paddleY: aiPaddle.current.y,
-        difficulty: difficulty,
-      };
-
-      getAiPaddlePosition(aiInput)
-        .then(res => {
-          if (res && typeof res.x === 'number') {
-            aiTargetX.current = Math.max(PADDLE_RADIUS, Math.min(CANVAS_WIDTH - PADDLE_RADIUS, res.x));
-          } else {
-            // Fallback if AI response is invalid
-            aiTargetX.current = CANVAS_WIDTH / 2;
-          }
-        })
-        .catch(err => {
-          console.error("AI Error:", err);
-          toast({
-            variant: "destructive",
-            title: "AI Error",
-            description: "Could not get AI opponent's move. Using fallback.",
-          });
-          // Fallback in case of error
-          aiTargetX.current = CANVAS_WIDTH / 2;
-        })
-        .finally(() => {
-          isAiThinking.current = false;
-        });
-    }
-
-    aiPaddle.current.x += (aiTargetX.current - aiPaddle.current.x) * 0.15;
 
     puck.current.x += puck.current.vx;
     puck.current.y += puck.current.vy;
@@ -193,15 +146,15 @@ export default function AirHockeyGame({
       }
     };
     
-    if (puck.current.vy > 0) handlePaddleCollision(playerPaddle.current);
-    if (puck.current.vy < 0) handlePaddleCollision(aiPaddle.current);
+    handlePaddleCollision(player1Paddle.current);
+    handlePaddleCollision(player2Paddle.current);
 
     if (puck.current.y - puck.current.radius > CANVAS_HEIGHT) {
-      scores.current.ai++;
+      scores.current.player2++;
       onScoreChange({ ...scores.current });
       resetPuck(1);
     } else if (puck.current.y + puck.current.radius < 0) {
-      scores.current.player++;
+      scores.current.player1++;
       onScoreChange({ ...scores.current });
       resetPuck(-1);
     }
@@ -209,40 +162,74 @@ export default function AirHockeyGame({
     draw();
 
     animationFrameId.current = requestAnimationFrame(gameLoop);
-  }, [difficulty, onScoreChange, resetPuck, toast, isPaused, draw]);
+  }, [onScoreChange, resetPuck, isPaused, draw]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const getPos = (e: MouseEvent | TouchEvent) => {
+    const getPos = (clientX: number) => {
         const rect = canvas.getBoundingClientRect();
-        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
         return clientX - rect.left;
     };
 
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
         if (isPaused) return;
-        const x = getPos(e);
-        const y = 'touches' in e ? e.touches[0].clientY - canvas.getBoundingClientRect().top : e.clientY - canvas.getBoundingClientRect().top;
-        
-        if (y > CANVAS_HEIGHT / 2) {
-            const dist = Math.hypot(x - playerPaddle.current.x, y - playerPaddle.current.y);
-            if (dist < playerPaddle.current.radius) {
-                activePaddle.current = playerPaddle.current;
+        const touches = 'touches' in e ? e.changedTouches : [e];
+        for (let i = 0; i < touches.length; i++) {
+            const touch = touches[i];
+            const x = getPos(touch.clientX);
+            const y = touch.clientY - canvas.getBoundingClientRect().top;
+
+            let paddle: Paddle | null = null;
+            if (y > CANVAS_HEIGHT / 2) {
+                paddle = player1Paddle.current;
+            } else {
+                paddle = player2Paddle.current;
+            }
+            const dist = Math.hypot(x - paddle.x, y - paddle.y);
+            if (dist < paddle.radius * 2) { // Increase activation area
+                activePaddles.current.set('identifier' in touch ? touch.identifier : -1, paddle);
             }
         }
     };
     
     const handlePointerMove = (e: MouseEvent | TouchEvent) => {
-        if (!activePaddle.current || isPaused) return;
+        if (isPaused) return;
         if (e.cancelable) e.preventDefault();
-        const x = getPos(e);
-        activePaddle.current.x = Math.max(PADDLE_RADIUS, Math.min(CANVAS_WIDTH - PADDLE_RADIUS, x));
+        const touches = 'touches' in e ? e.changedTouches : [e];
+
+        for (let i = 0; i < touches.length; i++) {
+            const touch = touches[i];
+            const identifier = 'identifier' in touch ? touch.identifier : -1;
+            const activePaddle = activePaddles.current.get(identifier);
+
+            if (activePaddle) {
+                const x = getPos(touch.clientX);
+                const y = touch.clientY - canvas.getBoundingClientRect().top;
+                
+                let min_y = 0;
+                let max_y = CANVAS_HEIGHT;
+
+                if (activePaddle.id === 'player1') {
+                  min_y = CANVAS_HEIGHT / 2;
+                } else {
+                  max_y = CANVAS_HEIGHT / 2;
+                }
+                
+                activePaddle.x = Math.max(PADDLE_RADIUS, Math.min(CANVAS_WIDTH - PADDLE_RADIUS, x));
+                activePaddle.y = Math.max(min_y + PADDLE_RADIUS, Math.min(max_y - PADDLE_RADIUS, y));
+            }
+        }
     };
 
-    const handlePointerUp = () => {
-        activePaddle.current = null;
+    const handlePointerUp = (e: MouseEvent | TouchEvent) => {
+        const touches = 'touches' in e ? e.changedTouches : [e];
+        for (let i = 0; i < touches.length; i++) {
+            const touch = touches[i];
+            const identifier = 'identifier' in touch ? touch.identifier : -1;
+            activePaddles.current.delete(identifier);
+        }
     };
     
     canvas.addEventListener('mousedown', handlePointerDown);
@@ -250,7 +237,8 @@ export default function AirHockeyGame({
     document.addEventListener('mouseup', handlePointerUp);
     canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
     canvas.addEventListener('touchmove', handlePointerMove, { passive: false });
-    document.addEventListener('touchend', handlePointerUp);
+    canvas.addEventListener('touchend', handlePointerUp);
+    canvas.addEventListener('touchcancel', handlePointerUp);
 
     return () => {
         canvas.removeEventListener('mousedown', handlePointerDown);
@@ -259,6 +247,7 @@ export default function AirHockeyGame({
         canvas.removeEventListener('touchstart', handlePointerDown);
         canvas.removeEventListener('touchmove', handlePointerMove);
         document.removeEventListener('touchend', handlePointerUp);
+        canvas.removeEventListener('touchcancel', handlePointerUp);
     };
   }, [isPaused]);
 
@@ -283,4 +272,3 @@ export default function AirHockeyGame({
     />
   );
 }
- 

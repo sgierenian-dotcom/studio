@@ -9,25 +9,24 @@ import GameOver from '@/components/game/game-over';
 const WINNING_SCORE = 7;
 
 export default function Home() {
-  const [scores, setScores] = useState({ player: 0, ai: 0 });
-  const [difficulty, setDifficulty] = useState(0.5);
+  const [scores, setScores] = useState({ player1: 0, player2: 0 });
   const [resetKey, setResetKey] = useState(0);
   const [gameOver, setGameOver] = useState(false);
-  const [winner, setWinner] = useState<'player' | 'ai' | null>(null);
+  const [winner, setWinner] = useState<'player1' | 'player2' | null>(null);
 
-  const handleScoreChange = (newScores: { player: number; ai: number }) => {
+  const handleScoreChange = (newScores: { player1: number; player2: number }) => {
     setScores(newScores);
-    if (newScores.player >= WINNING_SCORE) {
-      setWinner('player');
+    if (newScores.player1 >= WINNING_SCORE) {
+      setWinner('player1');
       setGameOver(true);
-    } else if (newScores.ai >= WINNING_SCORE) {
-      setWinner('ai');
+    } else if (newScores.player2 >= WINNING_SCORE) {
+      setWinner('player2');
       setGameOver(true);
     }
   };
 
   const handleReset = () => {
-    setScores({ player: 0, ai: 0 });
+    setScores({ player1: 0, player2: 0 });
     setResetKey(prev => prev + 1);
     setGameOver(false);
     setWinner(null);
@@ -38,11 +37,10 @@ export default function Home() {
       <h1 className="font-headline text-5xl md:text-6xl font-bold tracking-tighter" style={{ color: '#39FF14', textShadow: '0 0 10px #39FF14' }}>
         Neon Slider
       </h1>
-      <Scoreboard player1Score={scores.player} player2Score={scores.ai} />
+      <Scoreboard player1Score={scores.player1} player2Score={scores.player2} />
       <div className="relative">
         <AirHockeyGame
           key={resetKey}
-          difficulty={difficulty}
           onScoreChange={handleScoreChange}
           initialScores={scores}
           isPaused={gameOver}
@@ -52,8 +50,6 @@ export default function Home() {
         )}
       </div>
       <GameControls
-        difficulty={difficulty}
-        onDifficultyChange={setDifficulty}
         onReset={handleReset}
         disabled={gameOver}
       />

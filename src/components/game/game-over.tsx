@@ -3,13 +3,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { RotateCcw } from 'lucide-react';
 
 type GameOverProps = {
-  winner: 'player' | 'ai';
+  winner: 'player1' | 'player2';
   onNewGame: () => void;
 };
 
 export default function GameOver({ winner, onNewGame }: GameOverProps) {
-  const winnerText = winner === 'player' ? 'You Won!' : 'AI Wins!';
-  const winnerColor = winner === 'player' ? '#00ff77' : '#b23cff';
+  const winnerText = winner === 'player1' ? 'Player 1 Wins!' : 'Player 2 Wins!';
+  const winnerColor = winner === 'player1' ? '#00ff77' : '#b23cff';
 
   return (
     <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-xl">
