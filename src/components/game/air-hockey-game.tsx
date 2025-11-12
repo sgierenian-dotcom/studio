@@ -355,7 +355,7 @@ export default function AirHockeyGame({
     };
 
     const handlePointerUp = (e: PointerEvent) => {
-      if(activePointers.has(e.pointerId)) {
+      if(activePointers.current.has(e.pointerId)) {
         activePointers.current.delete(e.pointerId);
         (e.target as HTMLElement)?.releasePointerCapture(e.pointerId);
       }
