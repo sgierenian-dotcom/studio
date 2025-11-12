@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
-import { RotateCcw, X } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Menu, RotateCcw, X } from 'lucide-react';
 
 type GameControlsProps = {
   onReset: () => void;
@@ -8,15 +9,23 @@ type GameControlsProps = {
 
 export default function GameControls({ onReset, onExit }: GameControlsProps) {
   return (
-    <div className="h-full flex flex-col items-center justify-center gap-4 p-4">
-      <Button onClick={onReset} variant="outline" className="w-full">
-        <RotateCcw className="mr-2 h-4 w-4" />
-        New Game
-      </Button>
-      <Button onClick={onExit} variant="destructive" className="w-full">
-        <X className="mr-2 h-4 w-4" />
-        Exit
-      </Button>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon">
+          <Menu className="h-4 w-4" />
+          <span className="sr-only">Open menu</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuItem onClick={onReset}>
+          <RotateCcw className="mr-2 h-4 w-4" />
+          <span>New Game</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onExit}>
+          <X className="mr-2 h-4 w-4" />
+          <span>Exit</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

@@ -65,9 +65,11 @@ export default function Home() {
       case 'playing':
       case 'game-over':
         return (
-          <div className="flex h-screen w-screen items-start justify-center p-4 gap-4">
-            <GameControls onReset={handleNewGame} onExit={handleExit} />
-            <div className="flex-1 h-full flex flex-col items-center justify-center gap-2">
+          <div className="relative h-screen w-screen items-start justify-center p-4">
+            <div className="absolute top-4 left-4 z-10">
+              <GameControls onReset={handleNewGame} onExit={handleExit} />
+            </div>
+            <div className="h-full w-full flex flex-col items-center justify-center gap-2">
               <h1 className="font-headline text-lg font-bold tracking-tighter" style={{ color: '#39FF14', textShadow: '0 0 10px #39FF14' }}>
                 Neon Slider
               </h1>
