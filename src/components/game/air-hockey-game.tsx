@@ -154,40 +154,32 @@ export default function AirHockeyGame({
   const updateAI = useCallback(() => {
     const { width, height } = canvasSize.current;
     const paddle = player2Paddle.current;
-    const reactionSpeed = 0.15; // Higher is slower
-    const errorMargin = 0.1; // 0 is perfect, 1 is very inaccurate
+    const reactionSpeed = 0.1; 
+    const errorMargin = 0.05;
 
     let targetX = puck.current.x;
 
-    // Predict puck's future position
-    if (puck.current.vy < 0) { // Puck is moving towards AI
-        const timeToReachPaddle = (paddle.y - puck.current.y) / (puck.current.vy * scale.current);
-        let predictedX = puck.current.x + puck.current.vx * scale.current * timeToReachPaddle;
+    if (puck.current.vy < 0) { 
+        const timeToReachPaddle = (paddle.y - puck.current.y) / puck.current.vy;
+        let predictedX = puck.current.x + puck.current.vx * timeToReachPaddle;
 
-        // Account for wall bounces
         if (predictedX < 0) predictedX = -predictedX;
         if (predictedX > width) predictedX = width - (predictedX - width);
         targetX = predictedX;
     }
 
-    // Add some randomness to the target
     targetX += (Math.random() - 0.5) * paddle.radius * errorMargin;
 
-
-    // Move paddle towards target
     const dx = targetX - paddle.x;
     paddle.x += dx * reactionSpeed;
 
-    // Defensive positioning
     let targetY = 60 * scale.current;
     if (puck.current.y < height / 2) {
-        targetY = Math.min(puck.current.y - puck.current.radius - paddle.radius, height / 2 - paddle.radius);
+      targetY = Math.max(puck.current.y + puck.current.radius, 60 * scale.current);
     }
     const dy = targetY - paddle.y;
     paddle.y += dy * 0.1;
 
-
-    // Clamp paddle position
     paddle.x = Math.max(paddle.radius, Math.min(width - paddle.radius, paddle.x));
     paddle.y = Math.max(paddle.radius, Math.min(height / 2 - paddle.radius, paddle.y));
   }, [scale]);
@@ -239,8 +231,9 @@ export default function AirHockeyGame({
           puck.current.vy = (puck.current.vy / speed) * maxSpeed;
         }
 
-        puck.current.x = paddle.x + nx * (paddle.radius + puck.current.radius);
-        puck.current.y = paddle.y + ny * (paddle.radius + puck.current.radius);
+        const overlap = paddle.radius + puck.current.radius - dist;
+        puck.current.x += nx * (overlap + 1);
+        puck.current.y += ny * (overlap + 1);
       }
     };
     
@@ -280,19 +273,21 @@ export default function AirHockeyGame({
         for (let i = 0; i < touches.length; i++) {
             const touch = touches[i];
             const {x, y} = getPos(touch.clientX, touch.clientY);
+            const { height } = canvasSize.current;
 
             let paddle: Paddle | null = null;
-            if (y > canvasSize.current.height / 2) {
+            
+            if (y > height / 2) {
                 paddle = player1Paddle.current;
             } else if (gameMode === 'pvp') {
                 paddle = player2Paddle.current;
             }
             
             if (paddle) {
-              const dist = Math.hypot(x - paddle.x, y - paddle.y);
-              if (dist < paddle.radius * 2) { // Increase activation area
-                  activePaddles.current.set('identifier' in touch ? touch.identifier : -1, paddle);
-              }
+                const dist = Math.hypot(x - paddle.x, y - paddle.y);
+                if (dist < paddle.radius * 2.5) { // Increase activation area
+                    activePaddles.current.set('identifier' in touch ? touch.identifier : -1, paddle);
+                }
             }
         }
     };
@@ -311,17 +306,17 @@ export default function AirHockeyGame({
                 const {x, y} = getPos(touch.clientX, touch.clientY);
                 const { width, height } = canvasSize.current;
                 
-                let min_y = 0;
-                let max_y = height;
+                let minY = 0;
+                let maxY = height;
 
                 if (activePaddle.id === 'player1') {
-                  min_y = height / 2;
+                  minY = height / 2;
                 } else {
-                  max_y = height / 2;
+                  maxY = height / 2;
                 }
                 
                 activePaddle.x = Math.max(activePaddle.radius, Math.min(width - activePaddle.radius, x));
-                activePaddle.y = Math.max(min_y + activePaddle.radius, Math.min(max_y - activePaddle.radius, y));
+                activePaddle.y = Math.max(minY + activePaddle.radius, Math.min(maxY - activePaddle.radius, y));
             }
         }
     };
