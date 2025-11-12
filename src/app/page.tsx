@@ -7,12 +7,14 @@ import GameControls from '@/components/game/game-controls';
 import GameOver from '@/components/game/game-over';
 
 const WINNING_SCORE = 7;
+export type GameMode = 'pvp' | 'pvc';
 
 export default function Home() {
   const [scores, setScores] = useState({ player1: 0, player2: 0 });
   const [resetKey, setResetKey] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState<'player1' | 'player2' | null>(null);
+  const [gameMode, setGameMode] = useState<GameMode>('pvp');
 
   const handleScoreChange = (newScores: { player1: number; player2: number }) => {
     setScores(newScores);
@@ -32,6 +34,11 @@ export default function Home() {
     setWinner(null);
   };
 
+  const handleGameModeChange = (mode: GameMode) => {
+    setGameMode(mode);
+    handleReset();
+  };
+
   return (
     <main className="flex h-screen flex-col items-center justify-center p-4 md:p-8 gap-4">
       <h1 className="font-headline text-5xl md:text-6xl font-bold tracking-tighter" style={{ color: '#39FF14', textShadow: '0 0 10px #39FF14' }}>
@@ -44,6 +51,7 @@ export default function Home() {
           onScoreChange={handleScoreChange}
           initialScores={scores}
           isPaused={gameOver}
+          gameMode={gameMode}
         />
         {gameOver && winner && (
           <GameOver winner={winner} onNewGame={handleReset} />
@@ -52,6 +60,8 @@ export default function Home() {
       <GameControls
         onReset={handleReset}
         disabled={gameOver}
+        gameMode={gameMode}
+        onGameModeChange={handleGameModeChange}
       />
     </main>
   );

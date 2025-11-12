@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useCallback } from 'react';
 import type { Paddle, Puck } from '@/lib/types';
+import type { GameMode } from '@/app/page';
 
 const BASE_CANVAS_WIDTH = 360;
 const BASE_CANVAS_HEIGHT = 640;
@@ -12,12 +13,14 @@ type AirHockeyGameProps = {
   onScoreChange: (scores: { player1: number; player2: number }) => void;
   initialScores: { player1: number; player2: number };
   isPaused: boolean;
+  gameMode: GameMode;
 };
 
 export default function AirHockeyGame({
   onScoreChange,
   initialScores,
   isPaused,
+  gameMode,
 }: AirHockeyGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -148,12 +151,56 @@ export default function AirHockeyGame({
     return () => window.removeEventListener('resize', updateCanvasSize);
   }, [updateCanvasSize]);
 
+  const updateAI = useCallback(() => {
+    const { width, height } = canvasSize.current;
+    const paddle = player2Paddle.current;
+    const reactionSpeed = 0.15; // Higher is slower
+    const errorMargin = 0.1; // 0 is perfect, 1 is very inaccurate
+
+    let targetX = puck.current.x;
+
+    // Predict puck's future position
+    if (puck.current.vy < 0) { // Puck is moving towards AI
+        const timeToReachPaddle = (paddle.y - puck.current.y) / (puck.current.vy * scale.current);
+        let predictedX = puck.current.x + puck.current.vx * scale.current * timeToReachPaddle;
+
+        // Account for wall bounces
+        if (predictedX < 0) predictedX = -predictedX;
+        if (predictedX > width) predictedX = width - (predictedX - width);
+        targetX = predictedX;
+    }
+
+    // Add some randomness to the target
+    targetX += (Math.random() - 0.5) * paddle.radius * errorMargin;
+
+
+    // Move paddle towards target
+    const dx = targetX - paddle.x;
+    paddle.x += dx * reactionSpeed;
+
+    // Defensive positioning
+    let targetY = 60 * scale.current;
+    if (puck.current.y < height / 2) {
+        targetY = Math.min(puck.current.y - puck.current.radius - paddle.radius, height / 2 - paddle.radius);
+    }
+    const dy = targetY - paddle.y;
+    paddle.y += dy * 0.1;
+
+
+    // Clamp paddle position
+    paddle.x = Math.max(paddle.radius, Math.min(width - paddle.radius, paddle.x));
+    paddle.y = Math.max(paddle.radius, Math.min(height / 2 - paddle.radius, paddle.y));
+  }, [scale]);
 
   const gameLoop = useCallback(() => {
     if (isPaused) {
       draw();
       animationFrameId.current = requestAnimationFrame(gameLoop);
       return;
+    }
+
+    if (gameMode === 'pvc') {
+      updateAI();
     }
 
     const { width, height } = canvasSize.current;
@@ -213,7 +260,7 @@ export default function AirHockeyGame({
     draw();
 
     animationFrameId.current = requestAnimationFrame(gameLoop);
-  }, [onScoreChange, resetPuck, isPaused, draw]);
+  }, [onScoreChange, resetPuck, isPaused, draw, gameMode, updateAI]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -237,12 +284,15 @@ export default function AirHockeyGame({
             let paddle: Paddle | null = null;
             if (y > canvasSize.current.height / 2) {
                 paddle = player1Paddle.current;
-            } else {
+            } else if (gameMode === 'pvp') {
                 paddle = player2Paddle.current;
             }
-            const dist = Math.hypot(x - paddle.x, y - paddle.y);
-            if (dist < paddle.radius * 2) { // Increase activation area
-                activePaddles.current.set('identifier' in touch ? touch.identifier : -1, paddle);
+            
+            if (paddle) {
+              const dist = Math.hypot(x - paddle.x, y - paddle.y);
+              if (dist < paddle.radius * 2) { // Increase activation area
+                  activePaddles.current.set('identifier' in touch ? touch.identifier : -1, paddle);
+              }
             }
         }
     };
@@ -302,7 +352,7 @@ export default function AirHockeyGame({
         document.removeEventListener('touchend', handlePointerUp);
         canvas.removeEventListener('touchcancel', handlePointerUp);
     };
-  }, [isPaused]);
+  }, [isPaused, gameMode]);
 
   useEffect(() => {
     animationFrameId.current = requestAnimationFrame(gameLoop);
@@ -314,7 +364,7 @@ export default function AirHockeyGame({
   }, [gameLoop]);
 
   return (
-    <div ref={containerRef} className="w-full h-[70vh] max-w-[360px] max-h-[640px] flex justify-center items-center">
+    <div ref={containerRef} className="w-full h-full flex justify-center items-center">
         <canvas
         ref={canvasRef}
         className="rounded-xl shadow-lg bg-card"
