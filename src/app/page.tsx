@@ -66,7 +66,7 @@ export default function Home() {
       case 'game-over':
         return (
           <div className="flex h-screen w-screen flex-col items-center justify-center p-4 md:p-8 gap-4">
-            <h1 className="font-headline text-5xl md:text-6xl font-bold tracking-tighter" style={{ color: '#39FF14', textShadow: '0 0 10px #39FF14' }}>
+            <h1 className="font-headline text-6xl md:text-7xl font-bold tracking-tighter" style={{ color: '#39FF14', textShadow: '0 0 10px #39FF14' }}>
               Neon Slider
             </h1>
             <Scoreboard player1Score={scores.player1} player2Score={scores.player2} />
