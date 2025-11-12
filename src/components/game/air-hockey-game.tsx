@@ -3,8 +3,8 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import type { Paddle, Puck } from '@/lib/types';
 
-const CANVAS_WIDTH = 360;
-const CANVAS_HEIGHT = 640;
+const BASE_CANVAS_WIDTH = 360;
+const BASE_CANVAS_HEIGHT = 640;
 const PADDLE_RADIUS = 30;
 const PUCK_RADIUS = 20;
 
@@ -20,27 +20,32 @@ export default function AirHockeyGame({
   isPaused,
 }: AirHockeyGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const scores = useRef(initialScores);
+
+  const scale = useRef(1);
+  const canvasSize = useRef({ width: BASE_CANVAS_WIDTH, height: BASE_CANVAS_HEIGHT });
+
   const player1Paddle = useRef<Paddle>({
     id: 'player1',
-    x: CANVAS_WIDTH / 2,
-    y: CANVAS_HEIGHT - 60,
+    x: canvasSize.current.width / 2,
+    y: canvasSize.current.height - 60,
     radius: PADDLE_RADIUS,
     color: '#00ff77',
     glow: '#00ff77',
   });
   const player2Paddle = useRef<Paddle>({
     id: 'player2',
-    x: CANVAS_WIDTH / 2,
+    x: canvasSize.current.width / 2,
     y: 60,
     radius: PADDLE_RADIUS,
     color: '#b23cff',
     glow: '#b23cff',
   });
   const puck = useRef<Puck>({
-    x: CANVAS_WIDTH / 2,
-    y: CANVAS_HEIGHT / 2,
+    x: canvasSize.current.width / 2,
+    y: canvasSize.current.height / 2,
     vx: 0,
     vy: 0,
     radius: PUCK_RADIUS,
@@ -52,8 +57,9 @@ export default function AirHockeyGame({
   const animationFrameId = useRef<number>();
 
   const resetPuck = useCallback((direction: number) => {
-    puck.current.x = CANVAS_WIDTH / 2;
-    puck.current.y = CANVAS_HEIGHT / 2;
+    const { width, height } = canvasSize.current;
+    puck.current.x = width / 2;
+    puck.current.y = height / 2;
     puck.current.vx = 4 * (Math.random() > 0.5 ? 1 : -1);
     puck.current.vy = 4 * direction;
   }, []);
@@ -69,11 +75,12 @@ export default function AirHockeyGame({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    const { width, height } = canvasSize.current;
+    ctx.clearRect(0, 0, width, height);
     
     const drawNeonCircle = (x: number, y: number, radius: number, color: string, glowColor: string) => {
       ctx.shadowColor = glowColor;
-      ctx.shadowBlur = 25;
+      ctx.shadowBlur = 25 * scale.current;
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
@@ -82,23 +89,65 @@ export default function AirHockeyGame({
     };
     
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 4 * scale.current;
     ctx.setLineDash([15, 15]);
     ctx.beginPath();
-    ctx.moveTo(0, CANVAS_HEIGHT / 2);
-    ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
+    ctx.moveTo(0, height / 2);
+    ctx.lineTo(width, height / 2);
     ctx.stroke();
     ctx.setLineDash([]);
     
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 3 * scale.current;
     ctx.beginPath();
-    ctx.arc(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 60, 0, 2 * Math.PI);
+    ctx.arc(width / 2, height / 2, 60 * scale.current, 0, 2 * Math.PI);
     ctx.stroke();
 
     drawNeonCircle(player1Paddle.current.x, player1Paddle.current.y, player1Paddle.current.radius, player1Paddle.current.color, player1Paddle.current.glow);
     drawNeonCircle(player2Paddle.current.x, player2Paddle.current.y, player2Paddle.current.radius, player2Paddle.current.color, player2Paddle.current.glow);
     drawNeonCircle(puck.current.x, puck.current.y, puck.current.radius, puck.current.color, puck.current.glow);
   }, []);
+  
+  const updateCanvasSize = useCallback(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+
+    const { width: containerWidth, height: containerHeight } = container.getBoundingClientRect();
+    const aspectRatio = BASE_CANVAS_WIDTH / BASE_CANVAS_HEIGHT;
+    
+    let newWidth = containerWidth;
+    let newHeight = containerWidth / aspectRatio;
+
+    if (newHeight > containerHeight) {
+      newHeight = containerHeight;
+      newWidth = containerHeight * aspectRatio;
+    }
+
+    canvasSize.current = { width: newWidth, height: newHeight };
+    scale.current = newWidth / BASE_CANVAS_WIDTH;
+    
+    canvas.width = newWidth;
+    canvas.height = newHeight;
+
+    player1Paddle.current.radius = PADDLE_RADIUS * scale.current;
+    player2Paddle.current.radius = PADDLE_RADIUS * scale.current;
+    puck.current.radius = PUCK_RADIUS * scale.current;
+
+    player1Paddle.current.x = newWidth / 2;
+    player1Paddle.current.y = newHeight - (60 * scale.current);
+    player2Paddle.current.x = newWidth / 2;
+    player2Paddle.current.y = 60 * scale.current;
+    
+    resetPuck(puck.current.vy > 0 ? 1 : -1);
+    draw();
+  }, [draw, resetPuck]);
+
+  useEffect(() => {
+    updateCanvasSize();
+    window.addEventListener('resize', updateCanvasSize);
+    return () => window.removeEventListener('resize', updateCanvasSize);
+  }, [updateCanvasSize]);
+
 
   const gameLoop = useCallback(() => {
     if (isPaused) {
@@ -107,15 +156,17 @@ export default function AirHockeyGame({
       return;
     }
 
-    puck.current.x += puck.current.vx;
-    puck.current.y += puck.current.vy;
+    const { width, height } = canvasSize.current;
+
+    puck.current.x += puck.current.vx * scale.current;
+    puck.current.y += puck.current.vy * scale.current;
 
     if (puck.current.x - puck.current.radius < 0) {
       puck.current.x = puck.current.radius;
       puck.current.vx *= -1;
     }
-    if (puck.current.x + puck.current.radius > CANVAS_WIDTH) {
-      puck.current.x = CANVAS_WIDTH - puck.current.radius;
+    if (puck.current.x + puck.current.radius > width) {
+      puck.current.x = width - puck.current.radius;
       puck.current.vx *= -1;
     }
 
@@ -149,7 +200,7 @@ export default function AirHockeyGame({
     handlePaddleCollision(player1Paddle.current);
     handlePaddleCollision(player2Paddle.current);
 
-    if (puck.current.y - puck.current.radius > CANVAS_HEIGHT) {
+    if (puck.current.y - puck.current.radius > height) {
       scores.current.player2++;
       onScoreChange({ ...scores.current });
       resetPuck(1);
@@ -168,9 +219,12 @@ export default function AirHockeyGame({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const getPos = (clientX: number) => {
+    const getPos = (clientX: number, clientY: number) => {
         const rect = canvas.getBoundingClientRect();
-        return clientX - rect.left;
+        return {
+          x: clientX - rect.left,
+          y: clientY - rect.top,
+        };
     };
 
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
@@ -178,11 +232,10 @@ export default function AirHockeyGame({
         const touches = 'touches' in e ? e.changedTouches : [e];
         for (let i = 0; i < touches.length; i++) {
             const touch = touches[i];
-            const x = getPos(touch.clientX);
-            const y = touch.clientY - canvas.getBoundingClientRect().top;
+            const {x, y} = getPos(touch.clientX, touch.clientY);
 
             let paddle: Paddle | null = null;
-            if (y > CANVAS_HEIGHT / 2) {
+            if (y > canvasSize.current.height / 2) {
                 paddle = player1Paddle.current;
             } else {
                 paddle = player2Paddle.current;
@@ -205,20 +258,20 @@ export default function AirHockeyGame({
             const activePaddle = activePaddles.current.get(identifier);
 
             if (activePaddle) {
-                const x = getPos(touch.clientX);
-                const y = touch.clientY - canvas.getBoundingClientRect().top;
+                const {x, y} = getPos(touch.clientX, touch.clientY);
+                const { width, height } = canvasSize.current;
                 
                 let min_y = 0;
-                let max_y = CANVAS_HEIGHT;
+                let max_y = height;
 
                 if (activePaddle.id === 'player1') {
-                  min_y = CANVAS_HEIGHT / 2;
+                  min_y = height / 2;
                 } else {
-                  max_y = CANVAS_HEIGHT / 2;
+                  max_y = height / 2;
                 }
                 
-                activePaddle.x = Math.max(PADDLE_RADIUS, Math.min(CANVAS_WIDTH - PADDLE_RADIUS, x));
-                activePaddle.y = Math.max(min_y + PADDLE_RADIUS, Math.min(max_y - PADDLE_RADIUS, y));
+                activePaddle.x = Math.max(activePaddle.radius, Math.min(width - activePaddle.radius, x));
+                activePaddle.y = Math.max(min_y + activePaddle.radius, Math.min(max_y - activePaddle.radius, y));
             }
         }
     };
@@ -261,14 +314,14 @@ export default function AirHockeyGame({
   }, [gameLoop]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={CANVAS_WIDTH}
-      height={CANVAS_HEIGHT}
-      className="rounded-xl shadow-lg bg-card"
-      style={{
-        boxShadow: `0 0 30px hsla(var(--primary), 0.5), 0 0 30px hsla(var(--accent), 0.5)`,
-      }}
-    />
+    <div ref={containerRef} className="w-full h-[70vh] max-w-[360px] max-h-[640px] flex justify-center items-center">
+        <canvas
+        ref={canvasRef}
+        className="rounded-xl shadow-lg bg-card"
+        style={{
+            boxShadow: `0 0 30px hsla(var(--primary), 0.5), 0 0 30px hsla(var(--accent), 0.5)`,
+        }}
+        />
+    </div>
   );
 }
