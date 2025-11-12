@@ -2,6 +2,10 @@ export type Paddle = {
   id: string;
   x: number;
   y: number;
+  vx: number;
+  vy: number;
+  lastX: number;
+  lastY: number;
   radius: number;
   color: string;
   glow: string;
