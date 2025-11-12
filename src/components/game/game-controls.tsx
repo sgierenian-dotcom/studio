@@ -7,12 +7,14 @@ type GameControlsProps = {
   difficulty: number;
   onDifficultyChange: (value: number) => void;
   onReset: () => void;
+  disabled?: boolean;
 };
 
 export default function GameControls({
   difficulty,
   onDifficultyChange,
   onReset,
+  disabled = false,
 }: GameControlsProps) {
   return (
     <div className="w-full max-w-sm flex flex-col items-center gap-4 mt-4">
@@ -27,13 +29,14 @@ export default function GameControls({
           step={0.1}
           value={[difficulty]}
           onValueChange={(value) => onDifficultyChange(value[0])}
+          disabled={disabled}
         />
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>Easy</span>
           <span>Hard</span>
         </div>
       </div>
-      <Button onClick={onReset} variant="outline">
+      <Button onClick={onReset} variant="outline" disabled={disabled}>
         <RotateCcw className="mr-2 h-4 w-4" />
         New Game
       </Button>

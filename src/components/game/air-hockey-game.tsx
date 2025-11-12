@@ -16,12 +16,14 @@ type AirHockeyGameProps = {
   difficulty: number;
   onScoreChange: (scores: { player: number; ai: number }) => void;
   initialScores: { player: number; ai: number };
+  isPaused: boolean;
 };
 
 export default function AirHockeyGame({
   difficulty,
   onScoreChange,
   initialScores,
+  isPaused,
 }: AirHockeyGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
@@ -55,6 +57,7 @@ export default function AirHockeyGame({
   const animationFrameId = useRef<number>();
   const lastAiCallTimestamp = useRef(0);
   const aiTargetX = useRef(CANVAS_WIDTH / 2);
+  const isAiThinking = useRef(false);
 
   const resetPuck = useCallback((direction: number) => {
     puck.current.x = CANVAS_WIDTH / 2;
@@ -68,19 +71,59 @@ export default function AirHockeyGame({
     resetPuck(Math.random() > 0.5 ? 1 : -1);
   }, [initialScores, resetPuck]);
 
-  const gameLoop = useCallback(() => {
+  const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    const drawNeonCircle = (x: number, y: number, radius: number, color: string, glowColor: string) => {
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 25;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    };
+    
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([15, 15]);
+    ctx.beginPath();
+    ctx.moveTo(0, CANVAS_HEIGHT / 2);
+    ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 60, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    drawNeonCircle(playerPaddle.current.x, playerPaddle.current.y, playerPaddle.current.radius, playerPaddle.current.color, playerPaddle.current.glow);
+    drawNeonCircle(aiPaddle.current.x, aiPaddle.current.y, aiPaddle.current.radius, aiPaddle.current.color, aiPaddle.current.glow);
+    drawNeonCircle(puck.current.x, puck.current.y, puck.current.radius, puck.current.color, puck.current.glow);
+  }, []);
+
+  const gameLoop = useCallback(() => {
+    if (isPaused) {
+      draw();
+      animationFrameId.current = requestAnimationFrame(gameLoop);
+      return;
+    }
+    
     const now = Date.now();
-    if (now - lastAiCallTimestamp.current > AI_CALL_INTERVAL) {
+    if (now - lastAiCallTimestamp.current > AI_CALL_INTERVAL && !isAiThinking.current) {
       lastAiCallTimestamp.current = now;
+      isAiThinking.current = true;
+
       const aiInput: AIPaddlePositionInput = {
         puckX: puck.current.x,
         puckY: puck.current.y,
-        paddleX: aiPaddle.current.x,
+        puckVY: puck.current.vy,
         paddleY: aiPaddle.current.y,
         difficulty: difficulty,
       };
@@ -89,6 +132,9 @@ export default function AirHockeyGame({
         .then(res => {
           if (res && typeof res.x === 'number') {
             aiTargetX.current = Math.max(PADDLE_RADIUS, Math.min(CANVAS_WIDTH - PADDLE_RADIUS, res.x));
+          } else {
+            // Fallback if AI response is invalid
+            aiTargetX.current = CANVAS_WIDTH / 2;
           }
         })
         .catch(err => {
@@ -96,8 +142,13 @@ export default function AirHockeyGame({
           toast({
             variant: "destructive",
             title: "AI Error",
-            description: "Could not get AI opponent's move.",
+            description: "Could not get AI opponent's move. Using fallback.",
           });
+          // Fallback in case of error
+          aiTargetX.current = CANVAS_WIDTH / 2;
+        })
+        .finally(() => {
+          isAiThinking.current = false;
         });
     }
 
@@ -155,38 +206,10 @@ export default function AirHockeyGame({
       resetPuck(-1);
     }
 
-    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    const drawNeonCircle = (x: number, y: number, radius: number, color: string, glowColor: string) => {
-      ctx.shadowColor = glowColor;
-      ctx.shadowBlur = 25;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    };
-    
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = 4;
-    ctx.setLineDash([15, 15]);
-    ctx.beginPath();
-    ctx.moveTo(0, CANVAS_HEIGHT / 2);
-    ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 60, 0, 2 * Math.PI);
-    ctx.stroke();
-
-    drawNeonCircle(playerPaddle.current.x, playerPaddle.current.y, playerPaddle.current.radius, playerPaddle.current.color, playerPaddle.current.glow);
-    drawNeonCircle(aiPaddle.current.x, aiPaddle.current.y, aiPaddle.current.radius, aiPaddle.current.color, aiPaddle.current.glow);
-    drawNeonCircle(puck.current.x, puck.current.y, puck.current.radius, puck.current.color, puck.current.glow);
+    draw();
 
     animationFrameId.current = requestAnimationFrame(gameLoop);
-  }, [difficulty, onScoreChange, resetPuck, toast]);
+  }, [difficulty, onScoreChange, resetPuck, toast, isPaused, draw]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -199,6 +222,7 @@ export default function AirHockeyGame({
     };
 
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+        if (isPaused) return;
         const x = getPos(e);
         const y = 'touches' in e ? e.touches[0].clientY - canvas.getBoundingClientRect().top : e.clientY - canvas.getBoundingClientRect().top;
         
@@ -211,7 +235,7 @@ export default function AirHockeyGame({
     };
     
     const handlePointerMove = (e: MouseEvent | TouchEvent) => {
-        if (!activePaddle.current) return;
+        if (!activePaddle.current || isPaused) return;
         if (e.cancelable) e.preventDefault();
         const x = getPos(e);
         activePaddle.current.x = Math.max(PADDLE_RADIUS, Math.min(CANVAS_WIDTH - PADDLE_RADIUS, x));
@@ -236,7 +260,7 @@ export default function AirHockeyGame({
         canvas.removeEventListener('touchmove', handlePointerMove);
         document.removeEventListener('touchend', handlePointerUp);
     };
-  }, []);
+  }, [isPaused]);
 
   useEffect(() => {
     animationFrameId.current = requestAnimationFrame(gameLoop);
