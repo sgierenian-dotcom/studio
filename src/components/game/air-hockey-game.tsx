@@ -2,18 +2,26 @@
 
 import React, { useRef, useEffect, useCallback } from 'react';
 import type { Paddle, Puck } from '@/lib/types';
-import type { GameMode } from '@/app/page';
+import type { GameMode, Difficulty } from '@/app/page';
 
 const BASE_CANVAS_WIDTH = 360;
 const BASE_CANVAS_HEIGHT = 640;
 const PADDLE_RADIUS = 30;
 const PUCK_RADIUS = 20;
 
+const DIFFICULTY_SETTINGS = {
+  easy: { speed: 0.04, prediction: 0.2 },
+  medium: { speed: 0.08, prediction: 0.5 },
+  hard: { speed: 0.12, prediction: 0.8 },
+  expert: { speed: 0.2, prediction: 1.0 },
+};
+
 type AirHockeyGameProps = {
   onScoreChange: (scores: { player1: number; player2: number }) => void;
   initialScores: { player1: number; player2: number };
   isPaused: boolean;
   gameMode: GameMode;
+  difficulty: Difficulty;
 };
 
 export default function AirHockeyGame({
@@ -21,6 +29,7 @@ export default function AirHockeyGame({
   initialScores,
   isPaused,
   gameMode,
+  difficulty,
 }: AirHockeyGameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,14 +73,14 @@ export default function AirHockeyGame({
     glow: '#fff',
   });
   
-  const activePointers = useRef<Map<number | string, Paddle>>(new Map());
+  const activePointers = useRef<Map<number, Paddle>>(new Map());
   const animationFrameId = useRef<number>();
 
   const resetPuck = useCallback((direction: number) => {
     const { width, height } = canvasSize.current;
     puck.current.x = width / 2;
     puck.current.y = height / 2;
-    puck.current.vx = 0; //(Math.random() > 0.5 ? 1 : -1) * (4 * scale.current);
+    puck.current.vx = 0;
     puck.current.vy = direction * (4 * scale.current);
   }, []);
 
@@ -116,7 +125,7 @@ export default function AirHockeyGame({
     drawNeonCircle(player2Paddle.current.x, player2Paddle.current.y, player2Paddle.current.radius, player2Paddle.current.color, player2Paddle.current.glow);
     drawNeonCircle(puck.current.x, puck.current.y, puck.current.radius, puck.current.color, puck.current.glow);
     ctx.shadowBlur = 0;
-  }, []);
+  }, [scale]);
   
   const updateCanvasSize = useCallback(() => {
     const container = containerRef.current;
@@ -161,34 +170,38 @@ export default function AirHockeyGame({
   const updateAI = useCallback(() => {
     const paddle = player2Paddle.current;
     const { width, height } = canvasSize.current;
-  
-    // Defensive position
+    const settings = DIFFICULTY_SETTINGS[difficulty];
+
     let targetX = width / 2;
     let targetY = 60 * scale.current;
-  
-    const isPuckInAIDefensiveZone = puck.current.y < height / 1.5;
-  
-    if (isPuckInAIDefensiveZone) {
-        // AI becomes more aggressive and predictive if puck is in its zone
-        const timeToIntercept = Math.abs((puck.current.y - paddle.y) / puck.current.vy) * 0.8;
-        targetX = puck.current.x + puck.current.vx * timeToIntercept;
-  
-        // Basic wall bounce prediction
-        if (targetX < 0) targetX = -targetX;
-        if (targetX > width) targetX = 2 * width - targetX;
-        
-        targetY = Math.max(puck.current.y, paddle.radius);
-    } 
-  
+
+    // Puck is on AI's side or moving towards it
+    if (puck.current.y < height / 2 || puck.current.vy < 0) {
+      // Offensive/Aggressive logic
+      const timeToIntercept = Math.abs((puck.current.y - paddle.y) / puck.current.vy) * settings.prediction;
+      let predictedX = puck.current.x + puck.current.vx * timeToIntercept;
+
+      // Basic wall bounce prediction
+      if (predictedX < 0) predictedX = -predictedX;
+      if (predictedX > width) predictedX = 2 * width - predictedX;
+      
+      targetX = predictedX;
+      targetY = Math.max(puck.current.y, paddle.radius);
+
+    } else {
+      // Defensive position: return to center goal
+      targetX = width / 2;
+      targetY = 60 * scale.current;
+    }
+
     // Clamp target to AI's side
     targetX = Math.max(paddle.radius, Math.min(width - paddle.radius, targetX));
     targetY = Math.max(paddle.radius, Math.min(height / 2 - paddle.radius, targetY));
   
     // Interpolate paddle position towards target position
-    const speed = puck.current.vy < 0 ? 0.2 : 0.1; // Faster when puck is coming towards it
-    paddle.x += (targetX - paddle.x) * speed;
-    paddle.y += (targetY - paddle.y) * speed;
-  }, [scale]);
+    paddle.x += (targetX - paddle.x) * settings.speed;
+    paddle.y += (targetY - paddle.y) * settings.speed;
+  }, [difficulty, scale]);
 
   const handleCollision = (paddle: Paddle, puck: Puck) => {
     const dx = puck.x - paddle.x;
@@ -280,11 +293,6 @@ export default function AirHockeyGame({
     handleCollision(player1Paddle.current, puck.current);
     handleCollision(player2Paddle.current, puck.current);
 
-    // Score detection
-    const goal_height = height / 3; 
-    const in_goal_1 = puck.current.x > width / 4 && puck.current.x < width * 3/4;
-    const in_goal_2 = puck.current.x > width / 4 && puck.current.x < width * 3/4;
-
     if (puck.current.y + puck.current.radius < 0) {
       scores.current.player1++;
       onScoreChange({ ...scores.current });
@@ -294,7 +302,6 @@ export default function AirHockeyGame({
       onScoreChange({ ...scores.current });
       resetPuck(1);
     }
-
 
     draw();
 

@@ -7,10 +7,12 @@ import GameControls from '@/components/game/game-controls';
 import GameOver from '@/components/game/game-over';
 import WelcomeScreen from '@/components/game/welcome-screen';
 import GameModeSelect from '@/components/game/game-mode-select';
+import DifficultySelect from '@/components/game/difficulty-select';
 
 const WINNING_SCORE = 7;
 export type GameMode = 'pvp' | 'pvc';
-export type GameState = 'welcome' | 'mode-select' | 'playing' | 'game-over';
+export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert';
+export type GameState = 'welcome' | 'mode-select' | 'difficulty-select' | 'playing' | 'game-over';
 
 export default function Home() {
   const [scores, setScores] = useState({ player1: 0, player2: 0 });
@@ -18,6 +20,7 @@ export default function Home() {
   const [gameState, setGameState] = useState<GameState>('welcome');
   const [winner, setWinner] = useState<'player1' | 'player2' | null>(null);
   const [gameMode, setGameMode] = useState<GameMode>('pvc');
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
 
   const handleScoreChange = (newScores: { player1: number; player2: number }) => {
     setScores(newScores);
@@ -42,6 +45,16 @@ export default function Home() {
   
   const handleModeSelect = (mode: GameMode) => {
     setGameMode(mode);
+    if (mode === 'pvc') {
+      setGameState('difficulty-select');
+    } else {
+      resetGame();
+      setGameState('playing');
+    }
+  };
+
+  const handleDifficultySelect = (selectedDifficulty: Difficulty) => {
+    setDifficulty(selectedDifficulty);
     resetGame();
     setGameState('playing');
   };
@@ -62,6 +75,8 @@ export default function Home() {
         return <WelcomeScreen onStart={handleStartGame} />;
       case 'mode-select':
         return <GameModeSelect onModeSelect={handleModeSelect} />;
+      case 'difficulty-select':
+        return <DifficultySelect onDifficultySelect={handleDifficultySelect} />;
       case 'playing':
       case 'game-over':
         return (
@@ -81,6 +96,7 @@ export default function Home() {
                   initialScores={scores}
                   isPaused={gameState === 'game-over'}
                   gameMode={gameMode}
+                  difficulty={difficulty}
                 />
                 {gameState === 'game-over' && winner && (
                   <GameOver winner={winner} onNewGame={handleNewGame} />
