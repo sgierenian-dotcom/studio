@@ -81,7 +81,7 @@ export default function AirHockeyGame({
     puck.current.x = width / 2;
     puck.current.y = height / 2;
     puck.current.vx = 0;
-    puck.current.vy = direction * (4 * scale.current);
+    puck.current.vy = direction * (6 * scale.current); // Increased initial speed
   }, []);
 
   useEffect(() => {
@@ -210,42 +210,41 @@ export default function AirHockeyGame({
     const min_dist = paddle.radius + puck.radius;
   
     if (distance < min_dist) {
-      // Resolve overlap
+      // 1. Resolve overlap
       const overlap = min_dist - distance;
       const nx = dx / distance;
       const ny = dy / distance;
       puck.x += nx * overlap;
       puck.y += ny * overlap;
   
-      // Elastic collision response
+      // 2. Calculate new velocities
       const angle = Math.atan2(dy, dx);
       const sine = Math.sin(angle);
       const cosine = Math.cos(angle);
   
-      // Rotate puck's velocity
+      // Rotate velocities to collision axis
       const vx1 = puck.vx * cosine + puck.vy * sine;
       const vy1 = puck.vy * cosine - puck.vx * sine;
-  
-      // Final velocities
-      let vx_final = -vx1;
-      const vy_final = vy1;
-  
-      // Add paddle velocity to the puck
-      const paddle_vx = paddle.x - paddle.lastX;
-      const paddle_vy = paddle.y - paddle.lastY;
-      vx_final += paddle_vx * 0.4;
-  
-      // Rotate back
-      puck.vx = vx_final * cosine - vy_final * sine;
-      puck.vy = vy_final * cosine + vx_final * sine;
-  
-      // Add a constant minimum speed to prevent sticking
-      const overall_speed = Math.hypot(puck.vx, puck.vy);
-      const boost = 1.1 + Math.abs(paddle_vx) * 0.1;
-      puck.vx = (puck.vx / overall_speed) * (overall_speed * boost);
-      puck.vy = (puck.vy / overall_speed) * (overall_speed * boost);
+      const vx2 = (paddle.x - paddle.lastX) * cosine + (paddle.y - paddle.lastY) * sine;
+      // const vy2 = (paddle.y - paddle.lastY) * cosine - (paddle.x - paddle.lastX) * sine;
+      
+      // Elastic collision formula for 1D
+      let final_vx1 = -vx1;
 
-      const maxSpeed = 15 * scale.current;
+      // Add paddle's own velocity for more power
+      final_vx1 += vx2 * 0.5;
+  
+      // Rotate velocities back
+      puck.vx = final_vx1 * cosine - vy1 * sine;
+      puck.vy = vy1 * cosine + final_vx1 * sine;
+  
+      // 3. Apply speed boost
+      const boost = 1.25; // Increased boost for more powerful hits
+      puck.vx *= boost;
+      puck.vy *= boost;
+
+      // 4. Cap max speed
+      const maxSpeed = 20 * scale.current;
       const currentSpeed = Math.hypot(puck.vx, puck.vy);
       if (currentSpeed > maxSpeed) {
         puck.vx = (puck.vx / currentSpeed) * maxSpeed;
@@ -277,7 +276,7 @@ export default function AirHockeyGame({
     puck.current.x += puck.current.vx;
     puck.current.y += puck.current.vy;
 
-    const FRICTION = 0.995;
+    const FRICTION = 0.998; // Slightly reduced friction
     puck.current.vx *= FRICTION;
     puck.current.vy *= FRICTION;
 
@@ -402,3 +401,5 @@ export default function AirHockeyGame({
     </div>
   );
 }
+
+    
