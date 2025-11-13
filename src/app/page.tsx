@@ -12,7 +12,7 @@ import DifficultySelect from '@/components/game/difficulty-select';
 const WINNING_SCORE = 7;
 export type GameMode = 'pvp' | 'pvc';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert';
-export type GameState = 'welcome' | 'mode-select' | 'difficulty-select' | 'playing' | 'game-over';
+export type GameState = 'welcome' | 'mode-select' | 'difficulty-select' | 'playing' | 'paused' | 'game-over';
 
 export default function Home() {
   const [scores, setScores] = useState({ player1: 0, player2: 0 });
@@ -68,48 +68,57 @@ export default function Home() {
     resetGame();
     setGameState('welcome');
   };
+
+  const handlePause = () => {
+    if (gameState === 'playing') {
+      setGameState('paused');
+    } else if (gameState === 'paused') {
+      setGameState('playing');
+    }
+  };
   
   const renderGameState = () => {
-    switch(gameState) {
-      case 'welcome':
-        return <WelcomeScreen onStart={handleStartGame} />;
-      case 'mode-select':
-        return <GameModeSelect onModeSelect={handleModeSelect} />;
-      case 'difficulty-select':
-        return <DifficultySelect onDifficultySelect={handleDifficultySelect} />;
-      case 'playing':
-      case 'game-over':
-        return (
-          <div className="relative h-screen w-screen items-start justify-center p-4">
-            <div className="absolute top-4 left-4 z-10">
-              <GameControls onReset={handleNewGame} onExit={handleExit} />
-            </div>
-            <div className="h-full w-full flex flex-col items-center justify-center gap-2">
-              <h1 className="font-headline text-lg font-bold tracking-tighter" style={{ color: '#39FF14', textShadow: '0 0 10px #39FF14' }}>
-                Neon Slider
-              </h1>
-              <Scoreboard player1Score={scores.player1} player2Score={scores.player2} />
-              <div className="relative w-full flex-1 flex justify-center items-center">
-                <AirHockeyGame
-                  key={resetKey}
-                  onScoreChange={handleScoreChange}
-                  initialScores={scores}
-                  isPaused={gameState === 'game-over'}
-                  gameMode={gameMode}
-                  difficulty={difficulty}
-                />
-                {gameState === 'game-over' && winner && (
-                  <GameOver winner={winner} onNewGame={handleNewGame} />
-                )}
-              </div>
-            </div>
-          </div>
-        );
+    const isGameActive = gameState === 'playing' || gameState === 'paused' || gameState === 'game-over';
+
+    if (!isGameActive) {
+      switch(gameState) {
+        case 'welcome':
+          return <WelcomeScreen onStart={handleStartGame} />;
+        case 'mode-select':
+          return <GameModeSelect onModeSelect={handleModeSelect} />;
+        case 'difficulty-select':
+          return <DifficultySelect onDifficultySelect={handleDifficultySelect} />;
+        default:
+          return <WelcomeScreen onStart={handleStartGame} />;
+      }
     }
+    
+    return (
+      <div className="relative h-screen w-screen flex items-center justify-center p-4">
+        <div className="w-full h-full flex items-center justify-center">
+          <AirHockeyGame
+            key={resetKey}
+            onScoreChange={handleScoreChange}
+            initialScores={scores}
+            isPaused={gameState !== 'playing'}
+            gameMode={gameMode}
+            difficulty={difficulty}
+          />
+          {gameState === 'game-over' && winner && (
+            <GameOver winner={winner} onNewGame={handleNewGame} onExit={handleExit} />
+          )}
+        </div>
+        <div className="absolute top-0 right-0 h-full flex flex-col items-center justify-center pr-4 md:pr-8 gap-4">
+            <Scoreboard player2Score={scores.player2} />
+            <GameControls onPause={handlePause} isPaused={gameState === 'paused'} onNewGame={handleNewGame} onExit={handleExit}/>
+            <Scoreboard player1Score={scores.player1} />
+        </div>
+      </div>
+    );
   }
 
   return (
-    <main className="h-screen w-screen bg-black">
+    <main className="h-screen w-screen bg-black overflow-hidden">
       {renderGameState()}
     </main>
   );
