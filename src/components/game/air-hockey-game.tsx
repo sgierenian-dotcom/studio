@@ -67,8 +67,8 @@ export default function AirHockeyGame({
     const { width, height } = canvasSize.current;
     puck.current.x = width / 2;
     puck.current.y = height / 2;
-    puck.current.vx = (Math.random() - 0.5) * 4 * scale.current;
-    puck.current.vy = direction * (8 * scale.current);
+    puck.current.vx = (Math.random() - 0.5) * 5 * scale.current;
+    puck.current.vy = direction * (10 * scale.current); // Increased initial speed
     puckTrail.current = [];
   }, [scale]);
 
@@ -212,15 +212,15 @@ export default function AirHockeyGame({
     if (!container || !canvas) return;
 
     const { width: containerWidth, height: containerHeight } = container.getBoundingClientRect();
-    const availableWidth = containerWidth - (80 * scale.current); // Account for scoreboard
-    const aspectRatio = BASE_CANVAS_WIDTH / BASE_CANVAS_HEIGHT;
     
-    let newWidth = availableWidth;
-    let newHeight = availableWidth / aspectRatio;
+    // Adjusted to better fill the space while keeping aspect ratio.
+    const aspectRatio = BASE_CANVAS_WIDTH / BASE_CANVAS_HEIGHT;
+    let newWidth = containerWidth;
+    let newHeight = newWidth / aspectRatio;
 
     if (newHeight > containerHeight) {
       newHeight = containerHeight;
-      newWidth = containerHeight * aspectRatio;
+      newWidth = newHeight * aspectRatio;
     }
 
     canvas.width = newWidth;
@@ -239,7 +239,7 @@ export default function AirHockeyGame({
     
     resetPuck(Math.random() > 0.5 ? 1 : -1);
     draw();
-  }, [draw, resetPuck, scale]);
+  }, [draw, resetPuck]);
 
   useEffect(() => {
     updateCanvasSize();
@@ -255,17 +255,21 @@ export default function AirHockeyGame({
     let targetX = width / 2;
     let targetY = 60 * scale.current;
 
+    // If puck is coming towards the AI
     if (puck.current.y < height / 1.5 && puck.current.vy < 0) {
+      // time to intercept
       const timeToIntercept = Math.abs((puck.current.y - paddle.y) / puck.current.vy) * settings.prediction;
       let predictedX = puck.current.x + puck.current.vx * timeToIntercept;
 
+      // Bounce prediction off walls
       if (predictedX < 0) predictedX = -predictedX;
-      if (predictedX > width) predictedX = 2 * width - predictedX;
-      
+      if (predictedX > width) predictedX = width - (predictedX - width);
+
       targetX = predictedX;
+      // Try to hit back
       targetY = Math.max(puck.current.y - paddle.radius, paddle.radius);
 
-    } else {
+    } else { // Return to default position
       targetX = width / 2;
       targetY = 100 * scale.current;
     }
@@ -285,34 +289,38 @@ export default function AirHockeyGame({
   
     if (distance < min_dist) {
       createParticles(puck.x, puck.y, paddle.glow);
-      const overlap = min_dist - distance;
+      
       const angle = Math.atan2(dy, dx);
       
-      // Resolve overlap
+      // 1. Resolve Overlap
+      const overlap = min_dist - distance;
       puck.x += Math.cos(angle) * overlap;
       puck.y += Math.sin(angle) * overlap;
       
-      const paddleVelX = (paddle.x - paddle.lastX) / (16.67 / 1000);
-      const paddleVelY = (paddle.y - paddle.lastY) / (16.67 / 1000);
+      // 2. Calculate new velocities
+      const paddleVelX = paddle.vx;
+      const paddleVelY = paddle.vy;
 
-      const dot = dx * puck.vx + dy * puck.vy;
-      const mag = dx * dx + dy * dy;
+      // Elastic collision formula
+      const normalX = dx / distance;
+      const normalY = dy / distance;
       
-      const impulseX = (puck.vx - (2 * dx * dot) / mag);
-      const impulseY = (puck.vy - (2 * dy * dot) / mag);
+      const p = 2 * (puck.vx * normalX + puck.vy * normalY - paddleVelX * normalX - paddleVelY * normalY) / 2; // Assuming equal mass
       
-      puck.vx = -impulseX;
-      puck.vy = -impulseY;
-
-      // Add paddle's own velocity for more power
-      puck.vx += paddleVelX * 0.05 * scale.current;
-      puck.vy += paddleVelY * 0.05 * scale.current;
+      puck.vx -= p * normalX;
+      puck.vy -= p * normalY;
+      
+      // Add a fraction of paddle's velocity for extra power
+      puck.vx += paddleVelX * 0.2;
+      puck.vy += paddleVelY * 0.2;
   
-      const boost = 1.1;
+      // 3. Apply speed boost
+      const boost = 1.15;
       puck.vx *= boost;
       puck.vy *= boost;
 
-      const maxSpeed = 25 * scale.current;
+      // 4. Cap max speed
+      const maxSpeed = 30 * scale.current;
       const currentSpeed = Math.hypot(puck.vx, puck.vy);
       if (currentSpeed > maxSpeed) {
         puck.vx = (puck.vx / currentSpeed) * maxSpeed;
@@ -324,6 +332,7 @@ export default function AirHockeyGame({
   const gameLoop = useCallback(() => {
     if (isPaused) {
       animationFrameId.current = requestAnimationFrame(gameLoop);
+      draw(); // Keep drawing even when paused
       return;
     }
     
@@ -334,6 +343,12 @@ export default function AirHockeyGame({
 
     const p1 = player1Paddle.current;
     const p2 = player2Paddle.current;
+
+    // Update paddle velocities for collision calculation
+    p1.vx = (p1.x - p1.lastX);
+    p1.vy = (p1.y - p1.lastY);
+    p2.vx = (p2.x - p2.lastX);
+    p2.vy = (p2.y - p2.lastY);
 
     p1.lastX = p1.x;
     p1.lastY = p1.y;
@@ -347,19 +362,20 @@ export default function AirHockeyGame({
     puck.current.x += puck.current.vx;
     puck.current.y += puck.current.vy;
 
-    const FRICTION = 0.995;
+    const FRICTION = 0.998; // Reduced friction for faster puck
     puck.current.vx *= FRICTION;
     puck.current.vy *= FRICTION;
     
+    // Update puck trail
     puckTrail.current.unshift({ x: puck.current.x, y: puck.current.y, alpha: 1 });
-    if (puckTrail.current.length > 10) {
+    if (puckTrail.current.length > 15) { // Longer trail
       puckTrail.current.pop();
     }
     for (let i = 0; i < puckTrail.current.length; i++) {
-      puckTrail.current[i].alpha -= 0.1;
+      puckTrail.current[i].alpha -= 0.08;
     }
 
-
+    // Wall bounces
     if (puck.current.x - puck.current.radius < 0) {
       puck.current.x = puck.current.radius;
       puck.current.vx *= -1;
@@ -429,22 +445,32 @@ export default function AirHockeyGame({
         if (isPaused) return;
         const {x, y} = getPos(e.clientX, e.clientY);
         const { height } = canvasSize.current;
-        const distToP1 = Math.hypot(x - player1Paddle.current.x, y - player1Paddle.current.y);
-        const distToP2 = Math.hypot(x - player2Paddle.current.x, y - player2Paddle.current.y);
-
+        
         let paddle: Paddle | null = null;
         
-        if (y > height / 2 && distToP1 < player1Paddle.current.radius * 2) {
+        // Player 1's paddle is always in the bottom half
+        if (y > height / 2) {
             paddle = player1Paddle.current;
-        } else if (gameMode === 'pvp' && y < height / 2 && distToP2 < player2Paddle.current.radius * 2) {
+        } 
+        // In PvP mode, Player 2 is in the top half
+        else if (gameMode === 'pvp' && y < height / 2) {
             paddle = player2Paddle.current;
-        } else if (y > height / 2) { // Fallback for touch screens
-            paddle = player1Paddle.current;
         }
         
         if (paddle) {
           activePointers.current.set(e.pointerId, paddle);
           (e.target as HTMLElement)?.setPointerCapture(e.pointerId);
+          // Immediately move to start position to feel responsive
+          const { width } = canvasSize.current;
+          let minY = 0;
+          let maxY = height;
+          if (paddle.id === 'player1') {
+            minY = height / 2;
+          } else {
+            maxY = height / 2;
+          }
+          paddle.x = Math.max(paddle.radius, Math.min(width - paddle.radius, x));
+          paddle.y = Math.max(minY + paddle.radius, Math.min(maxY - paddle.radius, y));
         }
     };
     
@@ -508,3 +534,5 @@ export default function AirHockeyGame({
     </div>
   );
 }
+
+    
