@@ -159,8 +159,9 @@ export default function AirHockeyGame({
       const segment = puckTrail.current[i];
       ctx.fillStyle = puck.current.glow;
       ctx.beginPath();
-      ctx.arc(segment.x, segment.y, puck.current.radius * segment.alpha, 0, 2 * Math.PI);
-      ctx.globalAlpha = segment.alpha;
+      const radius = puck.current.radius * segment.alpha;
+      ctx.arc(segment.x, segment.y, Math.max(0, radius), 0, 2 * Math.PI);
+      ctx.globalAlpha = Math.max(0, segment.alpha);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
